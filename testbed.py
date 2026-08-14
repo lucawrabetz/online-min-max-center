@@ -113,12 +113,21 @@ def main():
         action="store_true",
         help="Fix the initial facility x_0 at the origin; arrivals stay uniform unit-square.",
     )
+    parser.add_argument(
+        "--T",
+        type=int,
+        nargs="+",
+        default=[50],
+        help="Number of demand points per instance. Pass several to generate one "
+        "instance type per value. Runs can also take a prefix of a larger instance "
+        "with run_experiments.py --T.",
+    )
     args = parser.parse_args()
     set_name = args.set_name
     _LOGGER.log_header(f"Generating testbed {set_name}")
     num_instances = args.num_instances
     dimensions = [2]
-    time_periods = [50]
+    time_periods = args.T
     ids = id_factory(set_name, dimensions, time_periods)
     generator = TestbedGenerator(
         set_name, num_instances, ids, fixed_zero=args.fixed_zero

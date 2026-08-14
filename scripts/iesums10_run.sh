@@ -6,7 +6,7 @@ LOGDIR="out/campaign_${HOST}"
 mkdir -p "$LOGDIR" out logs
 
 TABLE_GAMMAS=(3 5 10)
-PANEL_B_GAMMA=6
+PANEL_B_GAMMAS=(1.2 1.3 6)
 
 echo "=== Appendix D / $HOST / started $(date '+%F %T') ==="
 
@@ -24,13 +24,15 @@ python3 run_experiments.py \
   >"$LOGDIR/panelA_high.log" 2>&1
 echo "[$(date '+%F %T')] DONE   panelA_high"
 
-for T in 10 20 30 40 50; do
-  echo "[$(date '+%F %T')] START  panelB_T${T}"
-  python3 run_experiments.py \
-    --set_name unitsquarefixedzero --solvers OMIP,SOMIP --perm none \
-    --gamma "$PANEL_B_GAMMA" --T "$T" \
-    >"$LOGDIR/panelB_T${T}.log" 2>&1
-  echo "[$(date '+%F %T')] DONE   panelB_T${T}"
+for G in "${PANEL_B_GAMMAS[@]}"; do
+  for T in 10 20 30 40 50; do
+    echo "[$(date '+%F %T')] START  panelB_G${G}_T${T}"
+    python3 run_experiments.py \
+      --set_name unitsquarefixedzero --solvers OMIP,SOMIP --perm none \
+      --gamma "$G" --T "$T" \
+      >"$LOGDIR/panelB_G${G}_T${T}.log" 2>&1
+    echo "[$(date '+%F %T')] DONE   panelB_G${G}_T${T}"
+  done
 done
 
 for T in 50 75 100; do
