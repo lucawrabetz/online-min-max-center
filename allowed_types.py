@@ -83,7 +83,21 @@ _TEST_SHAPE = FLInstanceType()
 _OMIP = FLSolverType("OMIP")
 _SOMIP = FLSolverType("SOMIP")
 _CCTA = FLSolverType("CCTA")
-_SOLVERS: List[Any] = [_OMIP, _SOMIP, _CCTA]
+_BEA = FLSolverType("BEA")
+_NKCA = FLSolverType("NKCA")
+_SOLVERS: List[Any] = [_OMIP, _SOMIP, _CCTA, _BEA, _NKCA]
+# The online algorithms proceed iteration by iteration, so per-iteration timings are
+# meaningful for them (and only for them).
+_ONLINE_SOLVERS: List[Any] = [_CCTA, _BEA, _NKCA]
+_ONLINE_SOLVER_NAMES: List[str] = [solver.name for solver in _ONLINE_SOLVERS]
+# The MILP formulations. Note that these do not scale like the online algorithms do -
+# see the note in run_experiments.py before running these over a large sweep.
+_OFFLINE_SOLVERS: List[Any] = [_OMIP, _SOMIP]
+_SOLVER_SETS: Dict[str, List[Any]] = {
+    "all": _SOLVERS,
+    "online": _ONLINE_SOLVERS,
+    "offline": _OFFLINE_SOLVERS,
+}
 
 _BUILT_IN_TYPES: List[Any] = [str, int, float, bool]
 _ALLOWED_TYPES: List[Any] = _SOLVERS.copy()

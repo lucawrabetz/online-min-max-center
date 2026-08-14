@@ -1,11 +1,12 @@
 import os
 import logging
 import warnings
+import numpy as np
 from typing import List
 from argparse import ArgumentParser
 from allowed_types import FLSolverType, FLInstanceType
 from util import _DAT
-from problem import FLOfflineInstance
+from problem import FLOfflineInstance, DPoint
 
 from log_config import setup_logging, _LOGGER
 
@@ -24,17 +25,25 @@ class TestbedGenerator:
     """
 
     def __init__(
-        self, set_name: str, num_instances: int, instance_ids: List[FLInstanceType]
+        self,
+        set_name: str,
+        num_instances: int,
+        instance_ids: List[FLInstanceType],
+        fixed_zero: bool = False,
     ) -> None:
         """
         set_name: name of the testbed
         num_instances: number of instances to generate per instance type / shape / parameter combination
+        fixed_zero: if True, override the initial facility x_0 (points[0]) to the origin.
+            All other points (the arrivals x_1, ..., x_T) keep the usual uniform unit-square
+            distribution. Used to pin the geometry of the do-nothing cost v_T(F_0).
         """
         if set_name in _RESERVED_SETNAMES:
             _LOGGER.log_warning(f"Set name {set_name} already exists in {_DAT}")
         self._set_name = set_name
         self._num_instances = num_instances
         self._instance_ids = instance_ids
+        self._fixed_zero = fixed_zero
         self._final_ids: List[FLInstanceType] = []
 
     def generate_for_one_instanceid(self, instance_id: FLInstanceType) -> None:
@@ -60,6 +69,11 @@ class TestbedGenerator:
             instance = FLOfflineInstance(new_id)
             # for now, our random experiments always use the unit "square" and the interval [0, 1] for gamma, both uniform
             instance.set_random(low=0, high=1)
+            if self._fixed_zero:
+                # Pin x_0 to the origin, leaving the arrivals x_1, ..., x_T untouched,
+                # then refresh the distance matrix to reflect the moved point.
+                instance.points[0] = DPoint(np.zeros(new_id.n))
+                instance.set_distance_matrix()
             instance.write_to_csv()
             _LOGGER.log_body(
                 f"Generated instance {new_id.set_name}, n = {new_id.n}, T = {new_id.T}, number #{new_id.id}"
@@ -93,13 +107,22 @@ def id_factory(set_name: str, n: List[int], T: List[int]) -> List[FLInstanceType
 def main():
     parser = ArgumentParser()
     parser.add_argument("--set_name", type=str, default="test")
-    set_name = parser.parse_args().set_name
+    parser.add_argument("--num_instances", type=int, default=30)
+    parser.add_argument(
+        "--fixed_zero",
+        action="store_true",
+        help="Fix the initial facility x_0 at the origin; arrivals stay uniform unit-square.",
+    )
+    args = parser.parse_args()
+    set_name = args.set_name
     _LOGGER.log_header(f"Generating testbed {set_name}")
-    num_instances = 3
+    num_instances = args.num_instances
     dimensions = [2]
     time_periods = [50]
     ids = id_factory(set_name, dimensions, time_periods)
-    generator = TestbedGenerator(set_name, num_instances, ids)
+    generator = TestbedGenerator(
+        set_name, num_instances, ids, fixed_zero=args.fixed_zero
+    )
     generator.write()
 
 

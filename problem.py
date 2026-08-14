@@ -5,7 +5,13 @@ import pandas as pd
 from typing import Callable, List, Tuple, Optional
 from util import Data, _DAT, _FINALDB
 from log_config import _LOGGER
-from allowed_types import FLInstanceType, _TEST_SHAPE, _CCTA, _OMIP
+from allowed_types import (
+    FLInstanceType,
+    _TEST_SHAPE,
+    _CCTA,
+    _OMIP,
+    _ONLINE_SOLVER_NAMES,
+)
 
 
 class DPoint:
@@ -171,6 +177,19 @@ class FLOfflineInstance(Data):
         self, permutation: str, first_facility: Optional[int]
     ) -> None:
         self._permutation = permutation
+        # Hacky special case for *fixedzero instance sets: point 0 (x_0) is pinned to the
+        # origin and must remain the initial facility F_0 = {x_0}, so it has to stay the
+        # first point under every arrival order. Forcing first_facility = 0 keeps index 0
+        # first while preserving each permutation's semantics (full pins it, nearest/
+        # farthest build their greedy order starting from it). 'none' is already 0-first
+        # and forbids a forced first facility, so we leave it untouched.
+        if "fixedzero" in self.id.set_name and permutation != "none":
+            if first_facility is not None and first_facility != 0:
+                _LOGGER.log_warning(
+                    f"fixedzero instance {self.id.set_name}: overriding requested first "
+                    f"facility {first_facility} with 0 (x_0 must remain the origin facility)."
+                )
+            first_facility = 0
         none_order = [i for i in range(self.id.T + 1)]
         if permutation == "none":
             if first_facility is not None:
@@ -438,8 +457,14 @@ class CCTState(Data):
             self.facilities[self.t_index] = ell
             self.num_facilities += 1
             self.update_distances_new_facility(instance, ell)
-            self.cum_var_cost = self.compute_service_cost(new_facility=True)
-            self.service_costs[self.t_index] = self.cum_var_cost
+            # The service cost v_t(F_t) is charged to the objective for this time
+            # period, but the cumulative variable cost counter is reset to 0 - it only
+            # ever accumulates the variable costs incurred since the last facility was
+            # built (Algorithm 1, Step 6).
+            self.service_costs[self.t_index] = self.compute_service_cost(
+                new_facility=True
+            )
+            self.cum_var_cost = 0.0
             self.t_index += 1
             logging.debug(
                 f"Facilities: {self.facilities}, distances: {self.distance_to_closest_facility}."
@@ -607,7 +632,7 @@ class FLSolution(Data):
         self.distance_to_closest_facility = state.distance_to_closest_facility
         self.service_costs = state.service_costs
         self.iteration_times_ms = state.iteration_times_ms
-        if solver == _CCTA.name:
+        if solver in _ONLINE_SOLVER_NAMES:
             self.average_iteration_time_ms = sum(state.iteration_times_ms) / len(
                 state.iteration_times_ms
             )

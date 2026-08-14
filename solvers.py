@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import List, Any, Tuple, Dict
 from log_config import gurobi_log_file, _LOGGER
 from util import append_date, _EPSILON
-from allowed_types import FLSolverType, _OMIP, _SOMIP, _CCTA, _SOLVERS
+from allowed_types import FLSolverType, _OMIP, _SOMIP, _CCTA, _BEA, _NKCA, _SOLVERS
 from problem import FLOfflineInstance, FLSolution, CCTState
 from gurobipy import Model, GRB, quicksum
 
@@ -316,8 +316,8 @@ class SemiOfflineMIP(IFLMIP):
 
 
 class CCTAlgorithm(IFLSolver):
-    def __init__(self) -> None:
-        super().__init__(_CCTA)
+    def __init__(self, solver_id: FLSolverType = _CCTA) -> None:
+        super().__init__(solver_id)
 
     def configure_solver(self, instance: FLOfflineInstance) -> None:
         if not instance.is_set:
@@ -328,18 +328,29 @@ class CCTAlgorithm(IFLSolver):
         self.Gamma = instance.Gamma
         self.state.configure_state(instance)
 
-    def greedy_facility_selection(self) -> int:
-        """Distances updated with new point on previous facility set before calling."""
+    def facility_selection(self) -> int:
+        """
+        Step 4 of Algorithm 1: ell in argmax_{i in [t]} min_{j in F_{t-1}} d(x_i, x_j).
+        Distances updated with new point on previous facility set before calling.
+        """
         ell = -1
-        max_distance = sys.float_info.min
+        # Note: not sys.float_info.min, which is the smallest positive normal float -
+        # all distances can be 0 (duplicate points), and ell must still be set.
+        max_distance = -1.0
         for i in range(1, self.state.t_index + 1):
             if self.state.distance_to_closest_facility[i] > max_distance:
                 ell = i
                 max_distance = self.state.distance_to_closest_facility[i]
         return ell
 
+    def build_condition(self, nobuild_service_cost: float) -> bool:
+        """
+        Step 3 of Algorithm 1: cumVarCost + v_t(F_{t-1}) >= Gamma.
+        """
+        return self.state.cum_var_cost + nobuild_service_cost >= self.Gamma
+
     def add_facility(self) -> None:
-        ell = self.greedy_facility_selection()
+        ell = self.facility_selection()
         self.state.update(self.offline_instance, ell)
 
     def no_facility_update(self, service_cost: float) -> None:
@@ -354,7 +365,7 @@ class CCTAlgorithm(IFLSolver):
         _LOGGER.log_bodydebug(
             f"(cumVarCost: {self.state.cum_var_cost}) + (no build service cost: {nobuild_service_cost}) = {self.state.cum_var_cost + nobuild_service_cost}, gamma: {self.Gamma}"
         )
-        if self.state.cum_var_cost + nobuild_service_cost > self.Gamma:
+        if self.build_condition(nobuild_service_cost):
             self.add_facility()
         else:
             self.no_facility_update(nobuild_service_cost)
@@ -379,6 +390,36 @@ class CCTAlgorithm(IFLSolver):
         return solution
 
 
+class BEAlgorithm(CCTAlgorithm):
+    """
+    Break-even algorithm (Algorithm 2). Identical to CCT except that the new facility is
+    always located at the point that just arrived, rather than at the point farthest
+    from its nearest facility.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(_BEA)
+
+    def facility_selection(self) -> int:
+        """Step 4 of Algorithm 2: ell <- t."""
+        return self.state.t_index
+
+
+class NKCAlgorithm(CCTAlgorithm):
+    """
+    Naive k-center algorithm (Algorithm 3). Identical to CCT except that the build
+    decision ignores the cumulative variable cost counter, thresholding on the variable
+    cost of the current time period alone.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(_NKCA)
+
+    def build_condition(self, nobuild_service_cost: float) -> bool:
+        """Step 2 of Algorithm 3: v_t(F_{t-1}) >= Gamma."""
+        return nobuild_service_cost >= self.Gamma
+
+
 class SolverTypeRegistry:
     def __init__(self, registry: Dict[FLSolverType, Any] = {}) -> None:
         self.solver_registry = registry
@@ -392,5 +433,7 @@ _SOLVER_FACTORY = SolverTypeRegistry(
         _OMIP: OfflineMIP,
         _SOMIP: SemiOfflineMIP,
         _CCTA: CCTAlgorithm,
+        _BEA: BEAlgorithm,
+        _NKCA: NKCAlgorithm,
     }
 )

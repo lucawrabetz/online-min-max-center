@@ -3,7 +3,14 @@ import csv
 import pandas as pd
 import logging
 from typing import Dict, List, Any, Callable, Optional
-from allowed_types import FLInstanceType, FLSolverType, _OMIP, _SOMIP, _CCTA
+from allowed_types import (
+    FLInstanceType,
+    FLSolverType,
+    _OMIP,
+    _SOMIP,
+    _CCTA,
+    _ONLINE_SOLVERS,
+)
 from problem import FLOfflineInstance, FLSolution, DPoint, euclidean_distance
 from solvers import IFLSolver, OfflineMIP, SemiOfflineMIP, CCTAlgorithm, _SOLVER_FACTORY
 from data_model import (
@@ -193,10 +200,10 @@ class FLExperiment:
         row = OutputRow()
         row.from_run(self.run_id, instance, solver, solution)
         self.service_wrapper.write_horizon(solution.service_costs, self.run_id)
-        # if _SOMIP or _CCTA, facilities are a full time horizon
+        # if _SOMIP or an online algorithm, facilities are a full time horizon
         # if _OMIP, facilities are the final facilities
         self.facilities_wrapper.write_horizon(solution.facilities, self.run_id)
-        if solver_id == _CCTA:
+        if solver_id in _ONLINE_SOLVERS:
             self.time_wrapper.write_horizon(solution.iteration_times_ms, self.run_id)
         self.run_id += 1
         return row

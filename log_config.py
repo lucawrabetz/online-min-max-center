@@ -18,7 +18,7 @@ def setup_logging():
     file_format = "[%(asctime)s - %(name)s - %(levelname)s]: %(message)s"
     logging.basicConfig(
         filename=filepath,
-        level=logging.DEBUG,
+        level=logging.INFO,
         format=file_format,
         datefmt=DATETIME_FORMAT,
     )
