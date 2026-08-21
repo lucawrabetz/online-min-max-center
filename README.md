@@ -1,4 +1,7 @@
 # online min-max center problem.
+
+Repository for code for the paper "Online Facility Location with Recurring Maximum Demand", which can be found at [jourdainlaperski.com](https://jourdainlamperski.com/wp-content/uploads/2024/11/online-facility-website-1014482802-e1732897031508.pdf).
+
 ## Instructions
 1. Install the required packages (you might already have them in your base environment):
 ```bash
